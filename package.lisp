@@ -1,5 +1,6 @@
 ;;;; package.lisp
 
 (defpackage #:defmacro-enhance
-  (:use #:cl #:rutils.string))
+  (:use #:cl #:iterate)
+  (:export #:defmacro!))
 
