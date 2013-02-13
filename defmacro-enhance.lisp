@@ -8,6 +8,7 @@
 (in-package #:defmacro-enhance)
 
 (defmacro def-*!-symbol-p (symb)
+  "Define test-function for argument to be prefix-bang-hyphen symbol."
   (let ((s-symb (string symb)))
     `(defun ,(intern (format nil "~a~a"(string s-symb) "!-SYMBOL-P")) (symb)
        (and (symbolp symb)
@@ -40,6 +41,7 @@
       
 
 (defmacro defmacro/g! (name args &body body)
+  "DEFMACRO where G!-symbols are automaticaly gensymmed."
   (multiple-value-bind (forms decls doc) (parse-body body)
     (let ((syms (remove-duplicates
 		 (remove-if-not #'g!-symbol-p
@@ -70,6 +72,8 @@
 		,@body)))))
 
 (defmacro defmacro/g!/o! (name args &body body)
+  "DEFMACRO/G! where O!-symbols are automatically once-only
+(i.e. evaluating) arguments."
   (multiple-value-bind (forms decls doc) (parse-body body)
     (let ((syms (remove-duplicates
 		 (remove-if-not #'o!-symbol-p (alexandria:flatten args)))))
@@ -80,6 +84,9 @@
 	   ,@forms)))))
 
 (defmacro defmacro/g!/o!/e! (name args &body body)
+  "DEFMACRO/G!/O!, where E!-symbols are interned in package,
+where macro is expanded, not where it is defined.
+Useful for writing anaphoric macros."
   (multiple-value-bind (forms decls doc) (parse-body body)
     (let ((syms (remove-duplicates
 		 (remove-if-not #'e!-symbol-p (alexandria:flatten forms)))))
@@ -93,4 +100,5 @@
 
 ;; If some new defmacro/'s will be added, then change the following alias macroexpansion
 (defmacro defmacro! (name args &body body)
+  "Like defmacro, but with some extra perks."
   `(defmacro/g!/o!/e! ,name ,args ,@body))
