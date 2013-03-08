@@ -182,7 +182,7 @@ Useful for writing anaphoric macros."
 
 (defmacro defmacro-driver! (clause-template &body body)
   "Like defmacro, but with some extra perks."
-  `(defmacro/g!/o!/e! ,clause-template ,@body))
+  `(defmacro-driver/g!/e! ,clause-template ,@body))
  
 (defmacro defun! (name args &body body)
   `(defun/g!/e! ,name ,args ,@body))
