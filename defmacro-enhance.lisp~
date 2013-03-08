@@ -39,28 +39,30 @@
 		(collect form into forms))
 	    (finally (return (values forms declarations doc-string)))))))
       
-(eval-when (:compile-toplevel :load-toplevel :execute)
-  (defun declare-g!-syms-as-gsyms (body)
-    (multiple-value-bind (forms decls doc) (parse-body body)
-      (let ((syms (remove-duplicates
-		   (remove-if-not #'g!-symbol-p
-				  (alexandria:flatten forms)))))
-	`(,@(if doc `(,doc))
-	    ,@decls
-	    ,@(if syms
-		  `((let ,(mapcar (lambda (s)
-				    `(,s (gensym ,(subseq (symbol-name s) 3))))
-				  syms)
-		      ,@forms))
-		  forms))))))
 
 (defmacro define-/g! (src-name dst-name args &body body)
   "Define macro SRC-NAME on top of DST-NAME. Arg list of DST-NAME should
 contain BODY. All g!-symbols in BODY are transformed to gensyms."
+  (let ((g!-forms (gensym "FORMS"))
+	(g!-decls (gensym "DECLS"))
+	(g!-doc (gensym "DOC"))
+	(g!-syms (gensym "SYMS")))
   `(defmacro ,src-name ,args
-     (let ((,(intern "BODY") (declare-g!-syms-as-gsyms body)))
-       (append `(,',dst-name)
-	       (progn ,@body)))))
+     (multiple-value-bind (,g!-forms ,g!-decls ,g!-doc) (parse-body body)
+       (let ((,g!-syms (remove-duplicates
+			(remove-if-not #'g!-symbol-p
+				       (alexandria:flatten ,g!-forms)))))
+	 (let ((,(intern "BODY")
+		`(,@(if ,g!-doc `(,,g!-doc))
+		    ,@,g!-decls
+		    ,@(if ,g!-syms
+			  `((let ,(mapcar (lambda (s)
+					    `(,s (gensym ,(subseq (symbol-name s) 3))))
+					  ,g!-syms)
+			      ,@,g!-forms))
+			  ,g!-forms))))
+	   (append `(,',dst-name)
+		   (progn ,@body))))))))
 
 (define-/g! defmacro/g! defmacro (name args &body body)
   `(,name ,args ,@body))
@@ -70,20 +72,6 @@ contain BODY. All g!-symbols in BODY are transformed to gensyms."
 
 (define-/g! defun/g! defun (name args &body body)
   `(,name ,args ,@body))
-
-(macrolet ((frob (src-name dst-name)
-	     `(defmacro ,src-name (definitions &body body)
-		`(,',dst-name
-		  ,(mapcar (lambda (x)
-			     (destructuring-bind (name args &body body) x
-			       `(,name ,args
-				       ,(declare-g!-syms-as-gsyms body))))
-			   definitions)
-		  ,@body))))
-  (frob macrolet/g! macrolet)
-  (frob flet/g! flet)
-  (frob labels/g! labels))
-
 
 ;; ONCE-ONLY just not to depend on RUTILS, which I plan to enhance
 ;; Limited version, to use once only for my needs.
@@ -100,96 +88,60 @@ contain BODY. All g!-symbols in BODY are transformed to gensyms."
 			 specs gensyms)
 		,@body)))))
 
-(eval-when (:compile-toplevel :load-toplevel :execute)
-  (defun make-o!-once-only (args body)
-    (multiple-value-bind (forms decls doc) (parse-body body)
-      (let ((syms (remove-duplicates
-		   (remove-if-not #'o!-symbol-p
-				  (alexandria:flatten args)))))
-	`(,@(if doc `(,doc))
-	    ,@decls
-	    (once-only ,syms
-	      ,@forms))))))
-
 (defmacro/g! define-/o! (src-name dst-name args &body body)
   "All o!-symbols in the ARGS variable of the DST-NAME macro are
 treated as once-only symbols. BODY variable is parsed accordingly."
   `(defmacro ,src-name ,args
-     (let ((,(intern "BODY") (make-o!-once-only args body)))
-       (append `(,',dst-name)
-	       (progn ,@body)))))
+     (multiple-value-bind (,g!-forms ,g!-decls ,g!-doc) (parse-body body)
+       (let ((,g!-syms (remove-duplicates
+			(remove-if-not #'o!-symbol-p (alexandria:flatten args)))))
+	 (let ((,(intern "BODY")
+		`(,@(if ,g!-doc `(,,g!-doc))
+		    ,@,g!-decls
+		    (once-only ,,g!-syms
+		      ,@,g!-forms))))
+	   (append `(,',dst-name)
+		   (progn ,@body)))))))
 
 (define-/o! defmacro/g!/o! defmacro/g! (name args &body body)
   `(,name ,args ,@body))
-
-(defmacro macrolet/g!/o! (definitions &body body)
-  `(macrolet/g! ,(mapcar (lambda (x)
-			   (destructuring-bind (name args &body body) x
-			     `(,name ,args
-				     ,(make-o!-once-only args body))))
-			 definitions)
-     ,@body))
-
-(defun make-e!-internable (body)
-  (multiple-value-bind (forms decls doc) (parse-body body)
-    (let ((syms (remove-duplicates
-		 (remove-if-not #'e!-symbol-p (alexandria:flatten forms)))))
-      `(,@(if doc `(,doc))
-	  ,@decls
-	  (let ,(mapcar (lambda (sym)
-			  `(,sym (intern ,(subseq (string sym) 3))))
-			syms)
-	    ,@forms)))))
 
 (defmacro/g! define-/e! (src-name dst-name args &body body)
   "Deformation, in which E!-symbols are interned in package,
 where macro is expanded, not where it is defined.
 Useful for writing anaphoric macros."
   `(defmacro ,src-name ,args
-     (let ((,(intern "BODY") (make-e!-internable body)))
-       (append `(,',dst-name)
-	       (progn ,@body)))))
-
+     (multiple-value-bind (,g!-forms ,g!-decls ,g!-doc) (parse-body body)
+       (let ((,g!-syms (remove-duplicates
+			(remove-if-not #'e!-symbol-p (alexandria:flatten ,g!-forms)))))
+	 (let ((,(intern "BODY")
+		`(,@(if ,g!-doc `(,,g!-doc))
+		    ,@,g!-decls
+		    (let ,(mapcar (lambda (sym)
+				    `(,sym (intern ,(subseq (string sym) 3))))
+				  ,g!-syms)
+		      ,@,g!-forms))))
+	   (append `(,',dst-name)
+		   (progn ,@body)))))))
 
 (define-/e! defmacro/g!/o!/e! defmacro/g!/o! (name args &body body)
   `(,name ,args ,@body))
 
-(define-/e! defmacro-driver/g!/e! defmacro-driver/g!
-    (clause-template &body body)
+(define-/e! defmacro-driver/g!/e! defmacro-driver/g! (clause-template &body body)
   `(,clause-template ,@body))
 
 (define-/e! defun/g!/e! defun/g! (name args &body body)
   `(,name ,args ,@body))
 
-(macrolet ((frob (src-name dst-name)
-	     `(defmacro ,src-name (definitions &body body)
-		`(,',dst-name
-		  ,(mapcar (lambda (x)
-			     (destructuring-bind (name args &body body) x
-			       `(,name ,args
-				       ,(make-e!-internable body))))
-			   definitions)
-		  ,@body))))
-  (frob macrolet/g!/o!/e! macrolet/g!/o!)
-  (frob flet/g!/e! flet/g!)
-  (frob labels/g!/e! labels/g!))
 
 ;; If some new defmacro/'s will be added, then change the following alias macroexpansion
-
 (defmacro defmacro! (name args &body body)
   "Like defmacro, but with some extra perks."
   `(defmacro/g!/o!/e! ,name ,args ,@body))
 
 (defmacro defmacro-driver! (clause-template &body body)
   "Like defmacro, but with some extra perks."
-  `(defmacro/g!/o!/e! ,clause-template ,@body))
- 
+  `(defmacro-driver/g!/e! ,clause-template ,@body))
+
 (defmacro defun! (name args &body body)
   `(defun/g!/e! ,name ,args ,@body))
-
-(macrolet ((frob (src dst)
-	     `(defmacro ,src (definitions &body body)
-		`(,',dst ,definitions ,@body))))
-  (frob macrolet! macrolet/g!/o!/e!)
-  (frob flet! flet/g!/e!)
-  (frob labels! labels/g!/e!))

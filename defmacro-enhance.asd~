@@ -15,11 +15,11 @@
   :depends-on (#:defmacro-enhance #:rt)
   :components ((:file "tests")))
 
-(defmethod perform ((o test-op) (c (eql (find-system :defmacro-enhance))))
+(defmethod perform ((o test-op) (c (eql (find-system #:defmacro-enhance))))
   (operate 'load-op #:defmacro-enhance-test)
   (operate 'test-op #:defmacro-enhance-test :force t))
 
-(defmethod perform ((o test-op) (c (eql (find-system :defmacro-enhance-test))))
+(defmethod perform ((o test-op) (c (eql (find-system #:defmacro-enhance-test))))
   (or (funcall (intern "DO-TESTS" :rt))
       (error "test-op failed")))
 
