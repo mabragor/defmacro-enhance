@@ -77,7 +77,7 @@ contain BODY. All g!-symbols in BODY are transformed to gensyms."
 		  ,(mapcar (lambda (x)
 			     (destructuring-bind (name args &body body) x
 			       `(,name ,args
-				       ,(declare-g!-syms-as-gsyms body))))
+				       ,@(declare-g!-syms-as-gsyms body))))
 			   definitions)
 		  ,@body))))
   (frob macrolet/g! macrolet)
@@ -126,7 +126,7 @@ treated as once-only symbols. BODY variable is parsed accordingly."
   `(macrolet/g! ,(mapcar (lambda (x)
 			   (destructuring-bind (name args &body body) x
 			     `(,name ,args
-				     ,(make-o!-once-only args body))))
+				     ,@(make-o!-once-only args body))))
 			 definitions)
      ,@body))
 
@@ -167,7 +167,7 @@ Useful for writing anaphoric macros."
 		  ,(mapcar (lambda (x)
 			     (destructuring-bind (name args &body body) x
 			       `(,name ,args
-				       ,(make-e!-internable body))))
+				       ,@(make-e!-internable body))))
 			   definitions)
 		  ,@body))))
   (frob macrolet/g!/o!/e! macrolet/g!/o!)
