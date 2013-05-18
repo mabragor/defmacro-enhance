@@ -178,7 +178,8 @@ Useful for writing anaphoric macros."
 
 (defmacro defmacro! (name args &body body)
   "Like defmacro, but with some extra perks."
-  `(defmacro/g!/o!/e! ,name ,args ,@body))
+  `(eval-when (:compile-toplevel :load-toplevel :execute) ; this is present in DEFMACRO, and hence here.
+     (defmacro/g!/o!/e! ,name ,args ,@body)))
 
 (defmacro defmacro-driver! (clause-template &body body)
   "Like defmacro, but with some extra perks."
