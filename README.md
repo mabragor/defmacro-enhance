@@ -104,3 +104,8 @@ is implemented on top of defmacro, which understands only G!- like this:
 These building blocks are for now (2013/03/08) not perfect. In particular, they do not
 scan lambda-list for ARGS and BODY arguments and simply assume they are there.
 
+SPLICING-MACRO
+--------------
+
+DEFMACRO! now also supports features from CL-SPLICING-MACRO (better see
+README there https://github.com/mabragor/cl-splicing-macro)

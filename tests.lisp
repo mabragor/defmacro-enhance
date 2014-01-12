@@ -43,3 +43,10 @@
   (is (equal '(1 1) (let ((x 0))
 		      `(,(square (incf x)) ,x)))))
 
+(defmacro! foo (a b &sample (1 2))
+  `(+ ,a ,b))
+
+(test sampling
+  (is (equal '(let ()
+	       (+ 1 2))
+	     (testing-expansion foo))))

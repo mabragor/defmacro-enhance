@@ -174,12 +174,19 @@ Useful for writing anaphoric macros."
   (frob flet/g!/e! flet/g!)
   (frob labels/g!/e! labels/g!))
 
+(define-/sampling! defmacro/g!/o!/e!/sa! defmacro/g!/o!/e!)
+
+#+sbcl
+(define-/splicing! defmacro/g!/o!/e!/sa!/sp! defmacro/g!/o!/e!/sa!)
+
 ;; If some new defmacro/'s will be added, then change the following alias macroexpansion
 
 (defmacro defmacro! (name args &body body)
   "Like defmacro, but with some extra perks."
   `(eval-when (:compile-toplevel :load-toplevel :execute) ; this is present in DEFMACRO, and hence here.
-     (defmacro/g!/o!/e! ,name ,args ,@body)))
+     (#+sbcl defmacro/g!/o!/e!/sa!/sp!
+	     #-sbcl defmacro/g!/o!/e!/sa!
+	     ,name ,args ,@body)))
 
 (defmacro defmacro-driver! (clause-template &body body)
   "Like defmacro, but with some extra perks."
