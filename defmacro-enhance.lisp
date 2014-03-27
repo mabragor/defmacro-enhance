@@ -87,18 +87,20 @@ contain BODY. All g!-symbols in BODY are transformed to gensyms."
 
 ;; ONCE-ONLY just not to depend on RUTILS, which I plan to enhance
 ;; Limited version, to use once only for my needs.
-(defmacro once-only ((&rest specs) &body body)
-  (let ((gensyms (mapcar (lambda (sym) (gensym (string sym))) specs)))
-    `(let ,(mapcar (lambda (g s)
-		     `(,g (gensym ,(string s))))
-		   gensyms specs)
-       `(let (,,@(mapcar (lambda (g s)
-			   ``(,,g ,,s))
-			 gensyms specs))
-	  ,(let ,(mapcar (lambda (s g)
-			   `(,s ,g))
-			 specs gensyms)
-		,@body)))))
+(defun once-only (specs body)
+  (if specs
+      (let ((gensyms (mapcar (lambda (sym) (gensym (string sym))) specs)))
+	`((let ,(mapcar (lambda (g s)
+			  `(,g (gensym ,(string s))))
+			gensyms specs)
+	    `(let (,,@(mapcar (lambda (g s)
+				``(,,g ,,s))
+			      gensyms specs))
+	       ,(let ,(mapcar (lambda (s g)
+				`(,s ,g))
+			      specs gensyms)
+		     ,@body)))))
+      body))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defun make-o!-once-only (args body)
@@ -108,8 +110,7 @@ contain BODY. All g!-symbols in BODY are transformed to gensyms."
 				  (alexandria:flatten args)))))
 	`(,@(if doc `(,doc))
 	    ,@decls
-	    (once-only ,syms
-	      ,@forms))))))
+	    ,@(once-only syms forms))))))
 
 (defmacro/g! define-/o! (src-name dst-name args &body body)
   "All o!-symbols in the ARGS variable of the DST-NAME macro are
