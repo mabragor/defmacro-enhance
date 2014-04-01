@@ -47,6 +47,23 @@
   `(+ ,a ,b))
 
 (test sampling
-  (is (equal '(let ()
-	       (+ 1 2))
+  (is (equal '(+ 1 2)
 	     (testing-expansion foo))))
+
+(defmacro! autoflat-progn-list (&rest p!-args)
+  `(list ,@p!-args))
+
+(defmacro sample-progning-macro ()
+  `(progn 1 2))
+
+(test auto-progning
+  (is (equal '(list 1 2)
+	     (macroexpand-1 '(autoflat-progn-list (progn (progn 1) 2)))))
+  (is (equal '(list 1 (s (progn 2)))
+	     (macroexpand-1 '(autoflat-progn-list (progn (progn 1) (s (progn 2)))))))
+  (is (equal '(list 1 1 2 2)
+	     (macroexpand-1 '(autoflat-progn-list 1 (sample-progning-macro) 2))))
+  (is (equal '(1 1 2 2)
+	     (macrolet ((sample-progning-macrolet ()
+			  `(progn 1 2)))
+	       (autoflat-progn-list 1 (sample-progning-macrolet) 2)))))

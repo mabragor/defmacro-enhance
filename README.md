@@ -75,6 +75,7 @@ Here they are:
 
 3.  New, e!-symbols are added, that allow to express anaphoric macros more conveniently.
 
+4.  p!-symbols can be used to quickly define PROGN-flattening fields.
 
 Few code-duplication was necessary, to make code portable (and not SBCL specific) and to be
 able not to depend on RUTILS, since the plan is to rewrite anaphoric utilities there through e!- construction.
@@ -109,3 +110,48 @@ SPLICING-MACRO
 
 DEFMACRO! now also supports features from CL-SPLICING-MACRO (better see
 README there https://github.com/mabragor/cl-splicing-macro)
+
+Simply write your macros to expand into SPROGN-form (and don't forget to specify
+sample-macroexpansion parameters with help of &sample lambda-keyword).
+The only peculiarity is that this will not work together with once-only (o!-symbols),
+since their usage results in CAR of the expansion being LET, not SPROGN.
+
+```lisp
+(defmacro! fail-sprogn (o!-x &sample ())
+  `(sprogn ,o!-x ,o!-x))
+
+(macroexpand-1 '(fail-sprogn (+ 1 1)))
+(LET ((#:G123 (+ 1 1))) ;; not what you would want.
+  (SPROGN #:123 #:123))
+```
+
+PROGN-aware fields
+------------------
+
+Sometimes you want a certain field of your macro to automatically 'flatten'
+all the subforms to the 'top-level', if they are inside PROGNs.
+
+```lisp
+(your-macros (progn a b (progn c d))) ;; these two are desired
+(your-macros a b c d)                 ;; to have identical expansion
+```
+
+This you can easily achieve by defining YOUR-MACROS like this (note the P!-)
+```lisp
+(defmacro! your-macros (&rest p!-params)
+  (whatever-here))
+```
+
+P!-symbols will also flatten results of expansion of macros, that
+happen to expand to PROGN.
+```lisp
+(defmacro foo ()
+  '(progn bar baz))
+
+;; these two also have the same expansion
+(your-macros foo (foo))
+(your-macros foo bar baz)
+```
+
+Of course, this feature is kind of 'dual' to SPLICING-MACRO,
+described earlier.

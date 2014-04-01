@@ -19,7 +19,8 @@
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (def-*!-symbol-p g)
   (def-*!-symbol-p o)
-  (def-*!-symbol-p e))
+  (def-*!-symbol-p e)
+  (def-*!-symbol-p p))
 
 ;; My own version of parse-body, just to not depend on anyone
 (eval-when (:compile-toplevel :load-toplevel :execute)
@@ -38,21 +39,30 @@
 			   (collect form into forms)))
 		(collect form into forms))
 	    (finally (return (values forms declarations doc-string)))))))
+
+(defmacro grep-spec-syms ((var type lst) &body body)
+  `(let ((,var (remove-duplicates
+		(remove-if-not #',(intern (concatenate 'string (string type) "-SYMBOL-P")
+					  (find-package "DEFMACRO-ENHANCE"))
+			       (alexandria:flatten ,lst)))))
+     ,@body))
+
+(defmacro transforming-body-when-syms (&body body)
+  `(append (if doc (list doc))
+	   decls
+	   (if syms
+	       (list ,@body)
+	       forms)))
       
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defun declare-g!-syms-as-gsyms (body)
     (multiple-value-bind (forms decls doc) (parse-body body)
-      (let ((syms (remove-duplicates
-		   (remove-if-not #'g!-symbol-p
-				  (alexandria:flatten forms)))))
-	`(,@(if doc `(,doc))
-	    ,@decls
-	    ,@(if syms
-		  `((let ,(mapcar (lambda (s)
-				    `(,s (gensym ,(subseq (symbol-name s) 3))))
-				  syms)
-		      ,@forms))
-		  forms))))))
+      (grep-spec-syms (syms g! forms)
+	(transforming-body-when-syms
+	  `(let ,(mapcar (lambda (s)
+			   `(,s (gensym ,(subseq (symbol-name s) 3))))
+			 syms)
+	     ,@forms))))))
 
 (defmacro define-/g! (src-name dst-name args &body body)
   "Define macro SRC-NAME on top of DST-NAME. Arg list of DST-NAME should
@@ -90,7 +100,7 @@ contain BODY. All g!-symbols in BODY are transformed to gensyms."
 (defun once-only (specs body)
   (if specs
       (let ((gensyms (mapcar (lambda (sym) (gensym (string sym))) specs)))
-	`((let ,(mapcar (lambda (g s)
+	`(let ,(mapcar (lambda (g s)
 			  `(,g (gensym ,(string s))))
 			gensyms specs)
 	    `(let (,,@(mapcar (lambda (g s)
@@ -99,18 +109,15 @@ contain BODY. All g!-symbols in BODY are transformed to gensyms."
 	       ,(let ,(mapcar (lambda (s g)
 				`(,s ,g))
 			      specs gensyms)
-		     ,@body)))))
+		     ,@body))))
       body))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defun make-o!-once-only (args body)
     (multiple-value-bind (forms decls doc) (parse-body body)
-      (let ((syms (remove-duplicates
-		   (remove-if-not #'o!-symbol-p
-				  (alexandria:flatten args)))))
-	`(,@(if doc `(,doc))
-	    ,@decls
-	    ,@(once-only syms forms))))))
+      (grep-spec-syms (syms o! args)
+	(transforming-body-when-syms
+	  (once-only syms forms))))))
 
 (defmacro/g! define-/o! (src-name dst-name args &body body)
   "All o!-symbols in the ARGS variable of the DST-NAME macro are
@@ -133,14 +140,12 @@ treated as once-only symbols. BODY variable is parsed accordingly."
 
 (defun make-e!-internable (body)
   (multiple-value-bind (forms decls doc) (parse-body body)
-    (let ((syms (remove-duplicates
-		 (remove-if-not #'e!-symbol-p (alexandria:flatten forms)))))
-      `(,@(if doc `(,doc))
-	  ,@decls
-	  (let ,(mapcar (lambda (sym)
-			  `(,sym (intern ,(subseq (string sym) 3))))
-			syms)
-	    ,@forms)))))
+    (grep-spec-syms (syms e! forms)
+      (transforming-body-when-syms
+	`(let ,(mapcar (lambda (sym)
+			 `(,sym (intern ,(subseq (string sym) 3))))
+		       syms)
+	   ,@forms)))))
 
 (defmacro/g! define-/e! (src-name dst-name args &body body)
   "Deformation, in which E!-symbols are interned in package,
@@ -175,18 +180,55 @@ Useful for writing anaphoric macros."
   (frob flet/g!/e! flet/g!)
   (frob labels/g!/e! labels/g!))
 
-(define-/sampling! defmacro/g!/o!/e!/sa! defmacro/g!/o!/e!)
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (defun progn-flatten-p!-syms (args body lexenv-sym)
+    (multiple-value-bind (forms decls doc) (parse-body body)
+      (grep-spec-syms (syms p! args)
+	(transforming-body-when-syms
+	  `(let ,(mapcar (lambda (s)
+			   `(,s (expand-progns ,s ,lexenv-sym)))
+			 syms)
+	     ,@forms))))))
+
+(defun expand-progns (expr lexenv)
+  (let (res)
+    (labels ((rec (expr inside)
+	       (if (atom expr)
+		   (push expr res)
+		   (if (eq 'progn (car expr))
+		       (dolist (elt (cdr expr))
+			 (rec (macroexpand elt lexenv) t))
+		       (if inside
+			   (push expr res)
+			   (dolist (elt expr)
+			     (rec (macroexpand elt lexenv) t)))))))
+      (rec expr nil))
+    (nreverse res)))
+
+(defmacro define-/p! (src-name dst-name)
+  "Define macro SRC-NAME on top of DST-NAME. Arg list of DST-NAME should
+contain ARGS and BODY. All p!-symbols in BODY are transformed to gensyms."
+  `(defmacro ,src-name (name args &body body)
+     (let ((g!-env (gensym "ENV")))
+       (let ((body (progn-flatten-p!-syms args body g!-env)))
+	 `(,',dst-name ,name ,(append args (list '&environment g!-env))
+		       ,@body)))))
+
+(define-/p! defmacro/g!/o!/e!/p! defmacro/g!/o!/e!)
+
+
+(define-/sampling! defmacro/g!/o!/e!/p!/sa! defmacro/g!/o!/e!/p!)
 
 #+sbcl
-(define-/splicing! defmacro/g!/o!/e!/sa!/sp! defmacro/g!/o!/e!/sa!)
+(define-/splicing! defmacro/g!/o!/e!/p!/sa!/sp! defmacro/g!/o!/e!/p!/sa!)
 
 ;; If some new defmacro/'s will be added, then change the following alias macroexpansion
 
 (defmacro defmacro! (name args &body body)
   "Like defmacro, but with some extra perks."
   `(eval-when (:compile-toplevel :load-toplevel :execute) ; this is present in DEFMACRO, and hence here.
-     (#+sbcl defmacro/g!/o!/e!/sa!/sp!
-	     #-sbcl defmacro/g!/o!/e!/sa!
+     (#+sbcl defmacro/g!/o!/e!/p!/sa!/sp!
+	     #-sbcl defmacro/g!/o!/e!/p!/sa!
 	     ,name ,args ,@body)))
 
 (defmacro defmacro-driver! (clause-template &body body)

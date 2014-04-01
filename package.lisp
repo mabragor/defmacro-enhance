@@ -10,7 +10,7 @@
   (:export #:defmacro! #:defmacro-driver! #:defun!
 	   #:define-/g! #:define-/o! #:define-/e!
 	   #:macrolet! #:labels! #:flet! #:testing-expansion
-	   #:define-/sampling!
+	   #:define-/sampling! #:define-/p! #:expand-progns
 	   #+sbcl #:define-/splicing!
 	   #+sbcl #:enable-splicing-macro
 	   #+sbcl #:disable-splicing-macro
