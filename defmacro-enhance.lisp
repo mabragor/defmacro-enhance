@@ -205,14 +205,24 @@ Useful for writing anaphoric macros."
       (rec expr nil))
     (nreverse res)))
 
+(defun ensure-environment-in-args (args)
+  (let (env)
+    (iter (for elt on args)
+	  (if (eq '&environment (car elt))
+	      (setf env (cadr elt))))
+    (if env
+	(values env args)
+	(let ((it (gensym "ENV")))
+	  (values it (append args (list '&environment it)))))))
+	    
+
 (defmacro define-/p! (src-name dst-name)
   "Define macro SRC-NAME on top of DST-NAME. Arg list of DST-NAME should
 contain ARGS and BODY. All p!-symbols in BODY are transformed to gensyms."
   `(defmacro ,src-name (name args &body body)
-     (let ((g!-env (gensym "ENV")))
-       (let ((body (progn-flatten-p!-syms args body g!-env)))
-	 `(,',dst-name ,name ,(append args (list '&environment g!-env))
-		       ,@body)))))
+     (multiple-value-bind (env args) (ensure-environment-in-args args)
+       (let ((body (progn-flatten-p!-syms args body env)))
+	 `(,',dst-name ,name ,args ,@body)))))
 
 (define-/p! defmacro/g!/o!/e!/p! defmacro/g!/o!/e!)
 

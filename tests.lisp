@@ -56,6 +56,11 @@
 (defmacro sample-progning-macro ()
   `(progn 1 2))
 
+(defmacro! with-environment (&rest p!-args &environment env)
+  "DEFMACRO! just to test that &ENVIRONMENT is handled correctly."
+  (declare (ignorable env))
+  `(list ,@p!-args))
+
 (test auto-progning
   (is (equal '(list 1 2)
 	     (macroexpand-1 '(autoflat-progn-list (progn (progn 1) 2)))))
