@@ -181,8 +181,12 @@ Useful for writing anaphoric macros."
   (frob labels/g!/e! labels/g!))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
+  (defun gensym-p (sym)
+    (not (symbol-package sym)))
   (defun progn-flatten-p!-syms (args body lexenv-sym)
     (multiple-value-bind (forms decls doc) (parse-body body)
+      (when (gensym-p lexenv-sym)
+	(push `(declare (ignorable ,lexenv-sym)) decls))
       (grep-spec-syms (syms p! args)
 	(transforming-body-when-syms
 	  `(let ,(mapcar (lambda (s)
