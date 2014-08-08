@@ -140,9 +140,9 @@ treated as once-only symbols. BODY variable is parsed accordingly."
 			 definitions)
      ,@body))
 
-(defun make-e!-internable (body)
+(defun make-e!-internable (body env)
   (multiple-value-bind (forms decls doc) (parse-body body)
-    (grep-spec-syms (syms e! forms)
+    (grep-spec-syms (syms e! (cdr (assoc :variables (find-undefs `(progn ,@forms) :env env))))
       (transforming-body-when-syms
 	`(let ,(mapcar (lambda (sym)
 			 `(,sym (intern ,(subseq (string sym) 3))))
@@ -153,10 +153,11 @@ treated as once-only symbols. BODY variable is parsed accordingly."
   "Deformation, in which E!-symbols are interned in package,
 where macro is expanded, not where it is defined.
 Useful for writing anaphoric macros."
-  `(defmacro ,src-name ,args
-     (let ((,(intern "BODY") (make-e!-internable body)))
-       (append `(,',dst-name)
-	       (progn ,@body)))))
+  (let ((g!-env (gensym "G!-ENV")))
+    `(defmacro ,src-name ,(append args `(&environment ,g!-env))
+       (let ((,(intern "BODY") (make-e!-internable body ,g!-env)))
+	 (append `(,',dst-name)
+		 (progn ,@body))))))
 
 
 (define-/e! defmacro/g!/o!/e! defmacro/g!/o! (name args &body body)
@@ -170,14 +171,15 @@ Useful for writing anaphoric macros."
   `(,name ,args ,@body))
 
 (macrolet ((frob (src-name dst-name)
-	     `(defmacro ,src-name (definitions &body body)
-		`(,',dst-name
-		  ,(mapcar (lambda (x)
-			     (destructuring-bind (name args &body body) x
-			       `(,name ,args
-				       ,@(make-e!-internable body))))
-			   definitions)
-		  ,@body))))
+	     (let ((g!-env (gensym "G!-ENV")))
+	       `(defmacro ,src-name (definitions &body body &environment ,g!-env)
+		  `(,',dst-name
+		    ,(mapcar (lambda (x)
+			       (destructuring-bind (name args &body body) x
+				 `(,name ,args
+					 ,@(make-e!-internable body ,g!-env))))
+			     definitions)
+		    ,@body)))))
   (frob macrolet/g!/o!/e! macrolet/g!/o!)
   (frob flet/g!/e! flet/g!)
   (frob labels/g!/e! labels/g!))
