@@ -1,7 +1,7 @@
 ;;;; package.lisp
 
 (defpackage #:defmacro-enhance
-  (:use #:cl #:iterate)
+  (:use #:cl #:iterate #:cl-indeterminism)
   (:shadowing-import-from #:cl-splicing-macro #:define-/sampling! #:testing-expansion
 			  #+sbcl #:define-/splicing!
 			  #+sbcl #:enable-splicing-macro

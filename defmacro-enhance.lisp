@@ -55,9 +55,9 @@
 	       forms)))
       
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  (defun declare-g!-syms-as-gsyms (body)
+  (defun declare-g!-syms-as-gsyms (body env)
     (multiple-value-bind (forms decls doc) (parse-body body)
-      (grep-spec-syms (syms g! forms)
+      (grep-spec-syms (syms g! (cdr (assoc :variables (find-undefs `(progn ,@forms) :env env))))
 	(transforming-body-when-syms
 	  `(let ,(mapcar (lambda (s)
 			   `(,s (gensym ,(subseq (symbol-name s) 3))))
@@ -67,10 +67,11 @@
 (defmacro define-/g! (src-name dst-name args &body body)
   "Define macro SRC-NAME on top of DST-NAME. Arg list of DST-NAME should
 contain BODY. All g!-symbols in BODY are transformed to gensyms."
-  `(defmacro ,src-name ,args
-     (let ((,(intern "BODY") (declare-g!-syms-as-gsyms body)))
-       (append `(,',dst-name)
-	       (progn ,@body)))))
+  (let ((g!-env (gensym "G!-ENV")))
+    `(defmacro ,src-name ,(append args `(&environment ,g!-env))
+       (let ((,(intern "BODY") (declare-g!-syms-as-gsyms body ,g!-env)))
+	 (append `(,',dst-name)
+		 (progn ,@body))))))
 
 (define-/g! defmacro/g! defmacro (name args &body body)
   `(,name ,args ,@body))
@@ -82,14 +83,15 @@ contain BODY. All g!-symbols in BODY are transformed to gensyms."
   `(,name ,args ,@body))
 
 (macrolet ((frob (src-name dst-name)
-	     `(defmacro ,src-name (definitions &body body)
-		`(,',dst-name
-		  ,(mapcar (lambda (x)
-			     (destructuring-bind (name args &body body) x
-			       `(,name ,args
-				       ,@(declare-g!-syms-as-gsyms body))))
-			   definitions)
-		  ,@body))))
+	     (let ((g!-env (gensym "G!-ENV")))
+	       `(defmacro ,src-name (definitions &body body &environment ,g!-env)
+		  `(,',dst-name
+		    ,(mapcar (lambda (x)
+			       (destructuring-bind (name args &body body) x
+				 `(,name ,args
+					 ,@(declare-g!-syms-as-gsyms body ,g!-env))))
+			     definitions)
+		    ,@body)))))
   (frob macrolet/g! macrolet)
   (frob flet/g! flet)
   (frob labels/g! labels))
