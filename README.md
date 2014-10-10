@@ -7,53 +7,55 @@ Following features are supported:
 
 1.  g!-symbols in body of a macro become gensyms:
 
-        CL-USER> (defmacro! foo (bar)
-                  `(let ((,g!-bar ,bar))
-                     asdf))
-        FOO
-        CL-USER> (macroexpand-1 '(foo (+ 1 2)))
-        (LET ()
-          (LET ((#:BAR1115 (+ 1 2)))
-            ASDF))
-        T
-        CL-USER>
+    ```lisp
+    CL-USER> (defmacro! foo (bar)
+              `(let ((,g!-bar ,bar))
+                 asdf))
+    FOO
+    CL-USER> (macroexpand-1 '(foo (+ 1 2)))
+    (LET ()
+      (LET ((#:BAR1115 (+ 1 2)))
+        ASDF))
+    T
+    CL-USER>
+    ```
 
 2.  o!-symbols in the lambda-list of a macro become once-only arguments
 
-        CL-USER> (defmacro! square (o!-x)
-                   `(* ,o!-x ,o!-x))
-        SQUARE
-        CL-USER> (defparameter a 1)
-        A
-        CL-USER> (square (incf a))
-        4
-        CL-USER> (square (incf a))
-        9
-        CL-USER>
+    CL-USER> (defmacro! square (o!-x)
+               `(* ,o!-x ,o!-x))
+    SQUARE
+    CL-USER> (defparameter a 1)
+    A
+    CL-USER> (square (incf a))
+    4
+    CL-USER> (square (incf a))
+    9
+    CL-USER>
 
 3.  e!-symbols in the body of the macro are interned in the package,
 where macro is *expanded*, not where it is defined
 
-        CL-USER> (in-package defmacro-enhance)
-#<PACKAGE "DEFMACRO-ENHANCE">
-        DEFMACRO-ENHANCE> (defmacro! aif (test then &optional else)
-                            `(let ((,e!-it ,test))
-                               (if ,e!-it
-                                   ,then
-                                   ,@(if else `(,else)))))
-        AIF
-        DEFMACRO-ENHANCE> (in-package cl-user)
-        #<PACKAGE "COMMON-LISP-USER">
-        CL-USER> (macroexpand-1 '(defmacro-enhance::aif (+ 1 2) it 6))
-        (LET ()
-          (LET ((IT (+ 1 2)))
-            (IF IT
-                IT
-                6)))
-        T
-        CL-USER> (defmacro-enhance::aif (+ 1 2) it 6)
-        3
-        CL-USER>
+    CL-USER> (in-package defmacro-enhance)
+    #<PACKAGE "DEFMACRO-ENHANCE">
+    DEFMACRO-ENHANCE> (defmacro! aif (test then &optional else)
+                        `(let ((,e!-it ,test))
+                           (if ,e!-it
+                               ,then
+                               ,@(if else `(,else)))))
+    AIF
+    DEFMACRO-ENHANCE> (in-package cl-user)
+    #<PACKAGE "COMMON-LISP-USER">
+    CL-USER> (macroexpand-1 '(defmacro-enhance::aif (+ 1 2) it 6))
+    (LET ()
+      (LET ((IT (+ 1 2)))
+        (IF IT
+            IT
+            6)))
+    T
+    CL-USER> (defmacro-enhance::aif (+ 1 2) it 6)
+    3
+    CL-USER>
 
 As is noted in the header of let-over-lambda code, all the differences from that
 version should be clearly noted.
