@@ -7,6 +7,7 @@ Following features are supported:
 
 1.  g!-symbols in body of a macro become gensyms:
 
+        ```lisp
         CL-USER> (defmacro! foo (bar)
                   `(let ((,g!-bar ,bar))
                      asdf))
@@ -16,10 +17,12 @@ Following features are supported:
           (LET ((#:BAR1115 (+ 1 2)))
             ASDF))                                                                                                                                 
         T                                                                                                                                                   
-        CL-USER> 
+        CL-USER>
+        ```
 
 2.  o!-symbols in the lambda-list of a macro become once-only arguments
 
+	```lisp
         CL-USER> (defmacro! square (o!-x)
                    `(* ,o!-x ,o!-x))
         SQUARE                                                                                                                            
@@ -30,10 +33,12 @@ Following features are supported:
         CL-USER> (square (incf a))
         9
         CL-USER>
+        ```
 
 3.  e!-symbols in the body of the macro are interned in the package,
 where macro is *expanded*, not where it is defined
 
+	```lisp
         CL-USER> (in-package defmacro-enhance)
         #<PACKAGE "DEFMACRO-ENHANCE"> 
         DEFMACRO-ENHANCE> (defmacro! aif (test then &optional else)
@@ -54,6 +59,7 @@ where macro is *expanded*, not where it is defined
         CL-USER> (defmacro-enhance::aif (+ 1 2) it 6)
         3
         CL-USER>
+        ```
 
 As is noted in the header of let-over-lambda code, all the differences from that
 version should be clearly noted.
