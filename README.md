@@ -1,7 +1,7 @@
 defmacro-enhance
 ================
 
-Enhancement of defmacro in spirit of [let-over-lambda](http://www.letoverlambda.com/index.cl/toc).
+Enhancement of `defmacro` in spirit of [let-over-lambda](http://www.letoverlambda.com/index.cl/toc).
 
 Following features are supported:
 
