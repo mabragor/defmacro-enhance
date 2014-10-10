@@ -71,13 +71,17 @@ Here they are:
 2.  In once-only functionality name of a symbol in body of a macro is the same as in the
     lambda-list of arguments. I.e., instead of let-over-lambda's
 
-        (defmacro square (o!x)
-          `(* ,g!x ,g!x)) ; why in the world did g! appeared here? And is o! still accessible?
+    ```lisp
+    (defmacro square (o!x)
+        `(* ,g!x ,g!x)) ; why in the world did g! appeared here? And is o! still accessible?
+    ```
 
     we have
 
-        (defmacro square (o!-x)
-          `(* ,o!-x ,o!-x))
+    ```lisp
+    (defmacro square (o!-x)
+        `(* ,o!-x ,o!-x))
+    ```
 
 3.  New, e!-symbols are added, that allow to express anaphoric macros more conveniently.
 
