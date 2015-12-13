@@ -83,7 +83,7 @@ able not to depend on RUTILS, since the plan is to rewrite anaphoric utilities t
 DEFUN! and DEFMACRO-DRIVER!
 ---------------------------
 
-Not only DEFMACRO deserves to be enhanced. Sometimes, use just want to use gensyms and
+Not only DEFMACRO deserves to be enhanced. Sometimes, user just wants to use gensyms and
 variable injections in other constructs. Hence, DEFUN! and DEFMACRO-DRIVER! provide
 deformations of original constructs, that understand G!- and E!- symbols
 (There is not much use of O!-symbols for defun - all args are already once-only,
