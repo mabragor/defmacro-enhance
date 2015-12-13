@@ -7,6 +7,9 @@
 
 (in-package #:defmacro-enhance)
 
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (defparameter *last-versions* (make-hash-table)))
+
 (defmacro def-*!-symbol-p (symb)
   "Define test-function for argument to be prefix-bang-hyphen symbol."
   (let ((s-symb (string symb)))
@@ -25,6 +28,7 @@
 ;; My own version of parse-body, just to not depend on anyone
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defun parse-body (body)
+    ;; (format t "~a~%" body)
     (let (doc-string)
       (if (and (> (length body) 1)
 	       (stringp (car body)))
@@ -32,8 +36,9 @@
 		body (cdr body)))
       (iter (with non-decl-met = nil)
 	    (for form in body)
+	    ;; (format t "~a~%" form)
 	    (if (not non-decl-met)
-		(if (equal (car form) 'declare)
+		(if (and (consp form) (equal (car form) 'declare))
 		    (collect form into declarations)
 		    (progn (setf non-decl-met t)
 			   (collect form into forms)))
@@ -64,38 +69,61 @@
 			 syms)
 	     ,@forms))))))
 
-(defmacro define-/g! (src-name dst-name args &body body)
-  "Define macro SRC-NAME on top of DST-NAME. Arg list of DST-NAME should
-contain BODY. All g!-symbols in BODY are transformed to gensyms."
+(defmacro define-feature-adder (name extra-args &body body)
+  (let ((def-name (intern (concatenate 'string "DEFINE-/" (string name))))
+	(add-name (intern (concatenate 'string "ADD-/" (string name)))))
+    `(progn (defmacro ,def-name (src-name dst-name ,@extra-args)
+	      ,@body)
+	    (defmacro ,add-name (dst-name &optional (args nil args-p) &body body)
+	      ,(if (equal '(args &body body) extra-args)
+		   `(when (not args-p)
+		      (setf args '(name args &body body)
+			    body '((append (list name args) body))))
+		   `(declare (ignore args-p args)))
+	      (let ((src-name (intern (concatenate 'string (string dst-name) "/" ,(string name)))))
+		`(,',def-name ,src-name ,dst-name
+		   ,@,(if extra-args '(list args))
+		   ,@body))))))
+
+(define-feature-adder g! (args &body body)
+  "Arg list of DST-NAME should contain BODY. All g!-symbols in BODY are transformed to gensyms."
   (let ((g!-env (gensym "G!-ENV")))
     `(defmacro ,src-name ,(append args `(&environment ,g!-env))
        (let ((,(intern "BODY") (declare-g!-syms-as-gsyms body ,g!-env)))
 	 (append `(,',dst-name)
 		 (progn ,@body))))))
 
-(define-/g! defmacro/g! defmacro (name args &body body)
-  `(,name ,args ,@body))
+(defmacro add-to-last (feature object &rest extras)
+  "This should be DEFUN because it does produce side-effects, which should not be the case for macros.
+But let's see where it leads."
+  (let ((src-name (or (gethash object *last-versions*)
+		      (setf (gethash object *last-versions*) object)))
+	(add-name (intern (concatenate 'string "ADD-/" (string feature)))))
+    `(progn (,add-name ,src-name ,@extras)
+	    (setf (gethash ',object *last-versions*)
+		  ',(intern (concatenate 'string (string src-name) "/" (string feature)))))))
 
-(define-/g! defmacro-driver/g! defmacro-driver (clause-template &body body)
-  `(,clause-template ,@body))
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (add-to-last g! defmacro)
+  (add-to-last g! defmacro-driver (clause-template &body body)
+	       `(,clause-template ,@body))
+  (add-to-last g! defun)
+  (add-to-last g! define-feature-adder))
 
-(define-/g! defun/g! defun (name args &body body)
-  `(,name ,args ,@body))
+(define-feature-adder/g! gm! ()
+  `(defmacro ,src-name (definitions &body body &environment ,g!-env)
+     `(,',dst-name
+       ,(mapcar (lambda (x)
+		  (destructuring-bind (name args &body body) x
+		    `(,name ,args
+			    ,@(declare-g!-syms-as-gsyms body ,g!-env))))
+		definitions)
+       ,@body)))
 
-(macrolet ((frob (src-name dst-name)
-	     (let ((g!-env (gensym "G!-ENV")))
-	       `(defmacro ,src-name (definitions &body body &environment ,g!-env)
-		  `(,',dst-name
-		    ,(mapcar (lambda (x)
-			       (destructuring-bind (name args &body body) x
-				 `(,name ,args
-					 ,@(declare-g!-syms-as-gsyms body ,g!-env))))
-			     definitions)
-		    ,@body)))))
-  (frob macrolet/g! macrolet)
-  (frob flet/g! flet)
-  (frob labels/g! labels))
-
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (add-to-last gm! macrolet)
+  (add-to-last gm! flet)
+  (add-to-last gm! labels))
 
 ;; ONCE-ONLY just not to depend on RUTILS, which I plan to enhance
 ;; Limited version, to use once only for my needs.
@@ -121,7 +149,7 @@ contain BODY. All g!-symbols in BODY are transformed to gensyms."
 	(transforming-body-when-syms
 	  (once-only syms forms))))))
 
-(defmacro/g! define-/o! (src-name dst-name args &body body)
+(define-feature-adder/g! o! (args &body body)
   "All o!-symbols in the ARGS variable of the DST-NAME macro are
 treated as once-only symbols. BODY variable is parsed accordingly."
   `(defmacro ,src-name ,args
@@ -129,16 +157,20 @@ treated as once-only symbols. BODY variable is parsed accordingly."
        (append `(,',dst-name)
 	       (progn ,@body)))))
 
-(define-/o! defmacro/g!/o! defmacro/g! (name args &body body)
-  `(,name ,args ,@body))
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (add-to-last o! defmacro))
 
-(defmacro macrolet/g!/o! (definitions &body body)
-  `(macrolet/g! ,(mapcar (lambda (x)
-			   (destructuring-bind (name args &body body) x
-			     `(,name ,args
-				     ,@(make-o!-once-only args body))))
-			 definitions)
-     ,@body))
+(define-feature-adder om! ()
+  `(defmacro ,src-name (definitions &body body)
+     `(,',dst-name ,(mapcar (lambda (x)
+			      (destructuring-bind (name args &body body) x
+				`(,name ,args
+					,@(make-o!-once-only args body))))
+			    definitions)
+		   ,@body)))
+
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (add-to-last om! macrolet))
 
 (defun make-e!-internable (body env)
   (multiple-value-bind (forms decls doc) (parse-body body)
@@ -149,7 +181,7 @@ treated as once-only symbols. BODY variable is parsed accordingly."
 		       syms)
 	   ,@forms)))))
 
-(defmacro/g! define-/e! (src-name dst-name args &body body)
+(define-feature-adder/g! e! (args &body body)
   "Deformation, in which E!-symbols are interned in package,
 where macro is expanded, not where it is defined.
 Useful for writing anaphoric macros."
@@ -159,30 +191,26 @@ Useful for writing anaphoric macros."
 	 (append `(,',dst-name)
 		 (progn ,@body))))))
 
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (add-to-last e! defmacro)
+  (add-to-last e! defmacro-driver (clause-template &body body)
+	       `(,clause-template ,@body))
+  (add-to-last e! defun))
 
-(define-/e! defmacro/g!/o!/e! defmacro/g!/o! (name args &body body)
-  `(,name ,args ,@body))
+(define-feature-adder/g! em! ()
+  `(defmacro ,src-name (definitions &body body &environment ,g!-env)
+     `(,',dst-name
+       ,(mapcar (lambda (x)
+		  (destructuring-bind (name args &body body) x
+		    `(,name ,args
+			    ,@(make-e!-internable body ,g!-env))))
+		definitions)
+       ,@body)))
 
-(define-/e! defmacro-driver/g!/e! defmacro-driver/g!
-    (clause-template &body body)
-  `(,clause-template ,@body))
-
-(define-/e! defun/g!/e! defun/g! (name args &body body)
-  `(,name ,args ,@body))
-
-(macrolet ((frob (src-name dst-name)
-	     (let ((g!-env (gensym "G!-ENV")))
-	       `(defmacro ,src-name (definitions &body body &environment ,g!-env)
-		  `(,',dst-name
-		    ,(mapcar (lambda (x)
-			       (destructuring-bind (name args &body body) x
-				 `(,name ,args
-					 ,@(make-e!-internable body ,g!-env))))
-			     definitions)
-		    ,@body)))))
-  (frob macrolet/g!/o!/e! macrolet/g!/o!)
-  (frob flet/g!/e! flet/g!)
-  (frob labels/g!/e! labels/g!))
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (add-to-last em! macrolet)
+  (add-to-last em! flet)
+  (add-to-last em! labels))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defun gensym-p (sym)
@@ -224,7 +252,7 @@ Useful for writing anaphoric macros."
 	  (values it (append args (list '&environment it)))))))
 	    
 
-(defmacro define-/p! (src-name dst-name)
+(define-feature-adder p! ()
   "Define macro SRC-NAME on top of DST-NAME. Arg list of DST-NAME should
 contain ARGS and BODY. All p!-symbols in BODY are transformed to gensyms."
   `(defmacro ,src-name (name args &body body)
@@ -232,33 +260,74 @@ contain ARGS and BODY. All p!-symbols in BODY are transformed to gensyms."
        (let ((body (progn-flatten-p!-syms args body env)))
 	 `(,',dst-name ,name ,args ,@body)))))
 
-(define-/p! defmacro/g!/o!/e!/p! defmacro/g!/o!/e!)
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (add-to-last p! defmacro))
 
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (defun crunch-in-internal-def (body package)
+    (multiple-value-bind (forms decls doc) (parse-body body)
+      (append (if doc (list doc))
+	      decls
+	      `((flet ((intern-def (name)
+			 (intern name ,package)))
+		  ,@forms))))))
 
-(define-/sampling! defmacro/g!/o!/e!/p!/sa! defmacro/g!/o!/e!/p!)
+(define-feature-adder/g! i! (args &body body)
+  "Add a INTERN-DEF form, that interns a symbol into the package, where
+the macro/function was defined, not where it is expanded/called"
+  `(defmacro ,src-name ,args
+     (let ((,(intern "BODY") (crunch-in-internal-def body *package*)))
+       (append `(,',dst-name)
+	       (progn ,@body)))))
 
-#+sbcl
-(define-/splicing! defmacro/g!/o!/e!/p!/sa!/sp! defmacro/g!/o!/e!/p!/sa!)
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (add-to-last i! defmacro)
+  (add-to-last i! defun))
+
+(defmacro add-to-last-/sampling! (object)
+  (let* ((dst-name (or (gethash object *last-versions*)
+		       (setf (gethash object *last-versions*) object)))
+	 (src-name (intern (concatenate 'string (string dst-name) "/SA!"))))
+    `(progn (define-/sampling! ,src-name ,dst-name)
+	    (setf (gethash ',object *last-versions*) ',src-name))))
+
+(defmacro add-to-last-/splicing! (object)
+  (let* ((dst-name (or (gethash object *last-versions*)
+		       (setf (gethash object *last-versions*) object)))
+	 (src-name (intern (concatenate 'string (string dst-name) "/SP!"))))
+    `(progn (define-/splicing! ,src-name ,dst-name)
+	    (setf (gethash ',object *last-versions*) ',src-name))))
+
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (add-to-last-/sampling! defmacro)
+  #+sbcl
+  (add-to-last-/splicing! defmacro))
 
 ;; If some new defmacro/'s will be added, then change the following alias macroexpansion
 
-(defmacro defmacro! (name args &body body)
-  "Like defmacro, but with some extra perks."
-  `(eval-when (:compile-toplevel :load-toplevel :execute) ; this is present in DEFMACRO, and hence here.
-     (#+sbcl defmacro/g!/o!/e!/p!/sa!/sp!
-	     #-sbcl defmacro/g!/o!/e!/p!/sa!
-	     ,name ,args ,@body)))
+(defmacro extract-last-definition! (object &rest args-body)
+  (let ((exclam-name (intern (concatenate 'string (string object) "!"))))
+    `(defmacro ,exclam-name ,(or (car args-body)
+				 '(name args &body body))
+       (append (list ',(or (gethash object *last-versions*)
+			   object))
+	       ,(or (cadr args-body)
+		    ``(,name ,args ,@body))))))
 
-(defmacro defmacro-driver! (clause-template &body body)
-  "Like defmacro, but with some extra perks."
-  `(defmacro-driver/g!/e! ,clause-template ,@body))
- 
-(defmacro defun! (name args &body body)
-  `(defun/g!/e! ,name ,args ,@body))
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (extract-last-definition! defmacro)
+  (extract-last-definition! defmacro-driver (clause-template &body body)
+			    `(,clause-template ,@body))
+  (extract-last-definition! defun))
 
-(macrolet ((frob (src dst)
-	     `(defmacro ,src (definitions &body body)
-		`(,',dst ,definitions ,@body))))
-  (frob macrolet! macrolet/g!/o!/e!)
-  (frob flet! flet/g!/e!)
-  (frob labels! labels/g!/e!))
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (macrolet ((frob (x)
+	       `(extract-last-definition! ,x (definitions &body body)
+					  `(,definitions ,@body))))
+    (frob macrolet)
+    (frob flet)
+    (frob labels)))
+
+(defun hash->assoc (hash)
+  (iter (for (key val) in-hashtable hash)
+	(collect (cons key val))))

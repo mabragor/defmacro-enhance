@@ -61,6 +61,19 @@ where macro is *expanded*, not where it is defined
     CL-USER>
     ```
 
+4. `INTERN-DEF` function. This is opposite to `E!`-symbols: sometimes you want a macro
+   to intern a dynamically generated symbol name into the package, where macro is defined,
+   not where it is expanded.
+
+   ```lisp
+   SOME-OTHER-PACKAGE> (defmacro! foo (x) (intern-def (string x)))
+   SOME-OTHER-PACKAGE> (in-package cl-user)
+   CL-USER> (macroexpand-1 '(foo "ASDF"))
+
+   SOME-OTHER-PACKAGE::ASDF ; i.e. not CL-USER::ASDF
+   ```
+
+
 As is noted in the header of let-over-lambda code, all the differences from that
 version should be clearly noted.
 Here they are:

@@ -11,6 +11,7 @@
 	   #:define-/g! #:define-/o! #:define-/e!
 	   #:macrolet! #:labels! #:flet! #:testing-expansion
 	   #:define-/sampling! #:define-/p! #:expand-progns
+	   #:intern-def
 	   #+sbcl #:define-/splicing!
 	   #+sbcl #:enable-splicing-macro
 	   #+sbcl #:disable-splicing-macro

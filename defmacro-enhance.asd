@@ -8,7 +8,7 @@
 (defsystem :defmacro-enhance
   :serial t
   :description "Deformation of defmacro to defmacro!, macrolet to macrolet! etc. in spirit of let-over-lambda."
-  :version "0.3"
+  :version "0.5"
   :author "Alexander Popolitov <popolit@itep.ru>"
   :license "GPL"
   ;; do not depend ot rutils, since I plan to rewrite anaphoric macros there with help of this package

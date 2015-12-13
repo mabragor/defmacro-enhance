@@ -72,3 +72,19 @@
 	     (macrolet ((sample-progning-macrolet ()
 			  `(progn 1 2)))
 	       (autoflat-progn-list 1 (sample-progning-macrolet) 2)))))
+
+(defpackage #:defmacro-enhance-tests-internal
+  (:use #:cl #:defmacro-enhance)
+  (:export #:foo))
+
+(in-package defmacro-enhance-tests-internal)
+
+(defmacro! foo (str)
+  (list (intern-def (string-upcase str))
+	(intern (string-upcase str))))
+
+(in-package defmacro-enhance-tests)
+
+(test intern-def
+  (let ((it (macroexpand-1 '(defmacro-enhance-tests-internal:foo "asdf"))))
+    (is (equal '(defmacro-enhance-tests-internal::asdf asdf) it))))
